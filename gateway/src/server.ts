@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import express from "express";
+import { liveKitSelections } from "./livekit.js";
 import { WebSocketServer, type WebSocket } from "ws";
 import { config } from "./config.js";
 import { initStore, saveStore, userResources } from "./store.js";
@@ -285,8 +286,7 @@ app.post("/livekit-token", async (req, res) => {
   const { AccessToken } = await import("livekit-server-sdk");
   // Engine and action-backend choices ride as participant metadata. No
   // self-hosted URL or credential ever leaves the phone.
-  const engine = req.body?.engine === "openai" ? "openai" : "gemini";
-  const actionBackend = req.body?.actionBackend === "openclaw" ? "openclaw" : "cloud";
+  const { engine, actionBackend } = liveKitSelections(req.body);
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: userId,
     ttl: "15m",
