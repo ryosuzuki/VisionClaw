@@ -2,7 +2,6 @@ package com.meta.wearable.dat.externalsampleapps.cameraaccess.settings
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.meta.wearable.dat.externalsampleapps.cameraaccess.Secrets
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,6 +53,7 @@ enum class CaptureSource(val value: String, val label: String) {
 object SettingsManager {
     private const val PREFS_NAME = "visionclaw_settings"
     private const val DEFAULT_SIGNALING_URL = "wss://YOUR_SIGNALING_SERVER"
+    private const val DEFAULT_GATEWAY_BASE_URL = "https://api.visionagents.app"
 
     private lateinit var prefs: SharedPreferences
 
@@ -78,11 +78,11 @@ object SettingsManager {
 
     /** Full base URL of the hosted gateway, scheme included (e.g. "https://gw.example.com"). */
     var gatewayBaseUrl: String
-        get() = prefs.getString("gatewayBaseUrl", null) ?: Secrets.gatewayBaseUrl
+        get() = prefs.getString("gatewayBaseUrl", null) ?: DEFAULT_GATEWAY_BASE_URL
         set(value) = prefs.edit().putString("gatewayBaseUrl", value).apply()
 
     var gatewayToken: String
-        get() = prefs.getString("gatewayToken", null) ?: Secrets.gatewayToken
+        get() = prefs.getString("gatewayToken", "").orEmpty()
         set(value) = prefs.edit().putString("gatewayToken", value).apply()
 
     // An unfilled Secrets.kt.example placeholder is not empty, so without this
