@@ -44,6 +44,11 @@ from livekit.agents import (
     function_tool,
 )
 from livekit.plugins import google, openai
+from openclaw_relay import (
+    OPENCLAW_RESPONSE_TOPIC,
+    phone_openclaw_execute,
+    resolve_openclaw_response,
+)
 
 logger = logging.getLogger("visionclaw-agent")
 
@@ -174,6 +179,8 @@ class Userdata:
     frames: FrameHolder
     tracer: Tracer = field(default_factory=lambda: Tracer("unknown"))
     room: rtc.Room | None = None
+    action_backend: str = "cloud"
+    openclaw_pending: dict[str, asyncio.Future[str]] = field(default_factory=dict)
 
 
 _search_client: genai.Client | None = None
@@ -491,7 +498,10 @@ async def execute(ctx: RunContext[Userdata], task: str, attach_view: bool = Fals
     tracer = ctx.userdata.tracer
     tracer.emit("agent_action", tool="execute", task=task, attached_view=bool(image_b64))
     task_start = time.monotonic()
-    job = asyncio.ensure_future(_gateway_execute(ctx.userdata.user_id, task, image_b64))
+    if ctx.userdata.action_backend == "openclaw":
+        job = asyncio.ensure_future(phone_openclaw_execute(ctx.userdata, task, image_b64))
+    else:
+        job = asyncio.ensure_future(_gateway_execute(ctx.userdata.user_id, task, image_b64))
     done, _ = await asyncio.wait({job}, timeout=QUICK_ANSWER_S)
     if done:
         result = await job
@@ -702,14 +712,15 @@ async def entrypoint(ctx: JobContext):
     except json.JSONDecodeError:
         meta = {}
     engine = meta.get("engine", "gemini")
+    action_backend = "openclaw" if meta.get("actionBackend") == "openclaw" else "cloud"
     user_id = participant.identity or "demo"
-    logger.info("session start: user=%s engine=%s", user_id, engine)
+    logger.info("session start: user=%s engine=%s action_backend=%s", user_id, engine, action_backend)
 
     frames = FrameHolder()
     _watch_video(ctx, frames)
 
     tracer = Tracer(user_id)
-    tracer.emit("session_start", engine=engine, room=ctx.room.name)
+    tracer.emit("session_start", engine=engine, action_backend=action_backend, room=ctx.room.name)
     pump = asyncio.create_task(tracer.pump())
 
     async def _finish_trace() -> None:
@@ -793,9 +804,34 @@ async def entrypoint(ctx: JobContext):
 
     show_card = function_tool(_show_card, name="show_card")
 
+    userdata = Userdata(
+        user_id=user_id,
+        frames=frames,
+        tracer=tracer,
+        room=ctx.room,
+        action_backend=action_backend,
+    )
+
+    if action_backend == "openclaw":
+        def _handle_openclaw_response(reader: rtc.TextStreamReader, from_identity: str) -> None:
+            async def read_response() -> None:
+                if from_identity != user_id:
+                    logger.warning("ignored OpenClaw relay response from unexpected participant")
+                    return
+                try:
+                    resolve_openclaw_response(userdata, await reader.read_all())
+                except Exception as exc:
+                    logger.warning("invalid OpenClaw relay response: %s", type(exc).__name__)
+
+            task = asyncio.create_task(read_response())
+            _relay_tasks.add(task)
+            task.add_done_callback(_relay_tasks.discard)
+
+        ctx.room.register_text_stream_handler(OPENCLAW_RESPONSE_TOPIC, _handle_openclaw_response)
+
     session = AgentSession(
         llm=build_llm(engine),
-        userdata=Userdata(user_id=user_id, frames=frames, tracer=tracer, room=ctx.room),
+        userdata=userdata,
     )
 
     # The transcript pair the study runs on: final ASR of what the user said,

@@ -283,13 +283,14 @@ app.post("/livekit-token", async (req, res) => {
   // setup and greeting time.
   void ensureUser(userId).catch((err) => console.warn(`[provision] pre-warm failed for ${userId}:`, err));
   const { AccessToken } = await import("livekit-server-sdk");
-  // The engine choice (gemini | openai) rides as participant metadata; the
-  // worker reads it when the user joins and picks the realtime model.
+  // Engine and action-backend choices ride as participant metadata. No
+  // self-hosted URL or credential ever leaves the phone.
   const engine = req.body?.engine === "openai" ? "openai" : "gemini";
+  const actionBackend = req.body?.actionBackend === "openclaw" ? "openclaw" : "cloud";
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: userId,
     ttl: "15m",
-    metadata: JSON.stringify({ engine }),
+    metadata: JSON.stringify({ engine, actionBackend }),
   });
   // One room per call, not per user: agent dispatch fires on room creation,
   // so a redial into a still-draining room from the previous call would get

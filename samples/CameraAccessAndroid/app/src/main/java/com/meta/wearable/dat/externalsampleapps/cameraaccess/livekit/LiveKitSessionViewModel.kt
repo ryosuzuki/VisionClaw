@@ -25,15 +25,18 @@ import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.selectors.AutoDeviceSelector
 import com.meta.wearable.dat.core.selectors.DeviceSelector
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.CaptureSource
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.ActionBackend
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.GatewayApi
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.IntelligenceEngine
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.SettingsManager
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.openclaw.OpenClawBridge
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.stream.StreamingService
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.wearables.WearablesInit
 import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
+import io.livekit.android.room.datastream.StreamTextOptions
 import io.livekit.android.room.participant.Participant
 import io.livekit.android.room.track.CameraPosition
 import io.livekit.android.room.track.LocalVideoTrack
@@ -170,6 +173,8 @@ class LiveKitSessionViewModel(
         private const val FROZEN_JPEG_QUALITY = 90
         private const val TRANSCRIPTION_TOPIC = "lk.transcription"
         private const val CARD_TOPIC = "vc.ui"
+        private const val OPENCLAW_REQUEST_TOPIC = "vc.openclaw.request"
+        private const val OPENCLAW_RESPONSE_TOPIC = "vc.openclaw.response"
         private const val TRANSCRIPTION_FINAL_ATTRIBUTE = "lk.transcription_final"
         private const val TRANSCRIPTION_SEGMENT_ATTRIBUTE = "lk.segment_id"
         private const val CAPTION_LINGER_MS = 4000L
@@ -188,6 +193,7 @@ class LiveKitSessionViewModel(
     }
 
     private val frameGrabber = FrameGrabber()
+    private val openClawBridge = OpenClawBridge()
     private var grabberTrack: LocalVideoTrack? = null
 
     // MARK: Glasses feed (DAT stream -> LiveKit bridge)
@@ -245,6 +251,49 @@ class LiveKitSessionViewModel(
         }
         registerTranscriptionHandler()
         registerCardHandler()
+        registerOpenClawHandler()
+    }
+
+    /** The server-side voice agent sends only a correlated request. This
+     * phone performs the private Tailnet call and returns the result. */
+    private fun registerOpenClawHandler() {
+        room.registerTextStreamHandler(OPENCLAW_REQUEST_TOPIC) { receiver, _ ->
+            viewModelScope.launch {
+                val payload = try {
+                    val builder = StringBuilder()
+                    receiver.flow.collect { builder.append(it) }
+                    JSONObject(builder.toString())
+                } catch (e: Exception) {
+                    Log.w(TAG, "invalid OpenClaw relay request")
+                    return@launch
+                }
+                val id = payload.optString("id")
+                val task = payload.optString("task")
+                if (id.isBlank() || task.isBlank()) return@launch
+                val response = JSONObject().put("id", id)
+                try {
+                    if (SettingsManager.actionBackend != ActionBackend.SELF_HOSTED) {
+                        throw IOException("Self-hosted OpenClaw is not selected")
+                    }
+                    val image = payload.optString("image").takeIf { it.isNotBlank() }
+                    response.put("ok", true)
+                        .put("result", openClawBridge.execute(task, image))
+                } catch (e: Exception) {
+                    Log.w(TAG, "OpenClaw relay failed: ${e::class.java.simpleName}")
+                    response.put("ok", false)
+                        .put("error", e.message ?: "OpenClaw request failed")
+                }
+                try {
+                    room.localParticipant.sendText(
+                        response.toString(),
+                        StreamTextOptions(topic = OPENCLAW_RESPONSE_TOPIC),
+                    ).getOrThrow()
+                } catch (e: Exception) {
+                    Log.w(TAG, "OpenClaw relay response failed: ${e::class.java.simpleName}")
+                }
+            }
+        }
+        Log.d(TAG, "OpenClaw relay handler registered")
     }
 
     // MARK: Generative UI cards (agent show_card tool, "vc.ui" text streams)
@@ -440,6 +489,7 @@ class LiveKitSessionViewModel(
     // The engine the current call was dialed with, so a settings change can be
     // detected and applied by redialing.
     private var connectedEngine: IntelligenceEngine? = null
+    private var connectedActionBackend: ActionBackend? = null
     private var autoStarted = false
 
     fun start() {
@@ -485,8 +535,11 @@ class LiveKitSessionViewModel(
      */
     fun redialIfEngineChanged() {
         val selected = SettingsManager.intelligenceEngine
+        val selectedBackend = SettingsManager.actionBackend
         if (_uiState.value.state != SessionState.Connected) return
-        if (connectedEngine == null || connectedEngine == selected) return
+        if ((connectedEngine == null || connectedEngine == selected) &&
+            (connectedActionBackend == null || connectedActionBackend == selectedBackend)
+        ) return
         viewModelScope.launch {
             disconnectInternal()
             connectInternal()
@@ -503,9 +556,14 @@ class LiveKitSessionViewModel(
         stopPreview()
         try {
             val engine = SettingsManager.intelligenceEngine
-            val ticket = fetchTicket(engine)
+            val actionBackend = SettingsManager.actionBackend
+            if (actionBackend == ActionBackend.SELF_HOSTED && !SettingsManager.isOpenClawConfigured) {
+                throw IOException("Self-hosted OpenClaw is not configured. Check Settings.")
+            }
+            val ticket = fetchTicket(engine, actionBackend)
             room.connect(ticket.url, ticket.token)
             connectedEngine = engine
+            connectedActionBackend = actionBackend
             room.localParticipant.setMicrophoneEnabled(true)
             // Video failure (emulator, permission denied, glasses hiccup)
             // degrades to voice-only rather than killing the call.
@@ -559,6 +617,7 @@ class LiveKitSessionViewModel(
         room.disconnect()
         attachGrabber(null)
         connectedEngine = null
+        connectedActionBackend = null
         captionClearJob?.cancel()
         dismissedCardUuid = null
         _uiState.update {
@@ -778,10 +837,14 @@ class LiveKitSessionViewModel(
      * room JWT. The engine choice (which realtime model answers) rides along
      * and comes back inside the token as participant metadata for the worker.
      */
-    private suspend fun fetchTicket(engine: IntelligenceEngine): Ticket = withContext(Dispatchers.IO) {
+    private suspend fun fetchTicket(
+        engine: IntelligenceEngine,
+        actionBackend: ActionBackend,
+    ): Ticket = withContext(Dispatchers.IO) {
         val baseUrl = SettingsManager.gatewayBaseUrl.trimEnd('/')
         val body = JSONObject()
             .put("engine", engine.value)
+            .put("actionBackend", actionBackend.value)
             .toString()
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
