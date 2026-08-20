@@ -173,8 +173,6 @@ class LiveKitSessionViewModel(
         private const val FROZEN_JPEG_QUALITY = 90
         private const val TRANSCRIPTION_TOPIC = "lk.transcription"
         private const val CARD_TOPIC = "vc.ui"
-        private const val OPENCLAW_REQUEST_TOPIC = "vc.openclaw.request"
-        private const val OPENCLAW_RESPONSE_TOPIC = "vc.openclaw.response"
         private const val TRANSCRIPTION_FINAL_ATTRIBUTE = "lk.transcription_final"
         private const val TRANSCRIPTION_SEGMENT_ATTRIBUTE = "lk.segment_id"
         private const val CAPTION_LINGER_MS = 4000L
@@ -193,7 +191,6 @@ class LiveKitSessionViewModel(
     }
 
     private val frameGrabber = FrameGrabber()
-    private val openClawBridge = OpenClawBridge()
     private var grabberTrack: LocalVideoTrack? = null
 
     // MARK: Glasses feed (DAT stream -> LiveKit bridge)
@@ -251,49 +248,6 @@ class LiveKitSessionViewModel(
         }
         registerTranscriptionHandler()
         registerCardHandler()
-        registerOpenClawHandler()
-    }
-
-    /** The server-side voice agent sends only a correlated request. This
-     * phone performs the private Tailnet call and returns the result. */
-    private fun registerOpenClawHandler() {
-        room.registerTextStreamHandler(OPENCLAW_REQUEST_TOPIC) { receiver, _ ->
-            viewModelScope.launch {
-                val payload = try {
-                    val builder = StringBuilder()
-                    receiver.flow.collect { builder.append(it) }
-                    JSONObject(builder.toString())
-                } catch (e: Exception) {
-                    Log.w(TAG, "invalid OpenClaw relay request")
-                    return@launch
-                }
-                val id = payload.optString("id")
-                val task = payload.optString("task")
-                if (id.isBlank() || task.isBlank()) return@launch
-                val response = JSONObject().put("id", id)
-                try {
-                    if (SettingsManager.actionBackend != ActionBackend.SELF_HOSTED) {
-                        throw IOException("Self-hosted OpenClaw is not selected")
-                    }
-                    val image = payload.optString("image").takeIf { it.isNotBlank() }
-                    response.put("ok", true)
-                        .put("result", openClawBridge.execute(task, image))
-                } catch (e: Exception) {
-                    Log.w(TAG, "OpenClaw relay failed: ${e::class.java.simpleName}")
-                    response.put("ok", false)
-                        .put("error", e.message ?: "OpenClaw request failed")
-                }
-                try {
-                    room.localParticipant.sendText(
-                        response.toString(),
-                        StreamTextOptions(topic = OPENCLAW_RESPONSE_TOPIC),
-                    ).getOrThrow()
-                } catch (e: Exception) {
-                    Log.w(TAG, "OpenClaw relay response failed: ${e::class.java.simpleName}")
-                }
-            }
-        }
-        Log.d(TAG, "OpenClaw relay handler registered")
     }
 
     // MARK: Generative UI cards (agent show_card tool, "vc.ui" text streams)

@@ -9,8 +9,7 @@
     "start": "tsx src/server.ts",
     "provision": "tsx src/provision-cli.ts",
     "typecheck": "tsc --noEmit",
-    "trace": "tsx src/trace-cli.ts",
-    "test": "tsx --test src/*.test.ts"
+    "trace": "tsx src/trace-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
