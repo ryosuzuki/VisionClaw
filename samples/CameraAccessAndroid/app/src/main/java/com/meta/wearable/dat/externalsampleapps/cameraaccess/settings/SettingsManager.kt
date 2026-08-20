@@ -21,6 +21,18 @@ enum class IntelligenceEngine(val value: String, val label: String) {
     }
 }
 
+/** Selects only the action/tool executor. Voice, video, captions, cards, and
+ * session orchestration remain on Sean's current LiveKit implementation. */
+enum class ActionBackend(val value: String, val label: String) {
+    CLOUD("cloud", "Cloud tools"),
+    OPENCLAW("openclaw", "OpenClaw");
+
+    companion object {
+        fun fromValue(value: String?): ActionBackend =
+            entries.firstOrNull { it.value == value } ?: CLOUD
+    }
+}
+
 /**
  * Where video comes from. The app is a vision assistant first -- it opens
  * looking at the world through the phone -- and glasses are one capture
@@ -59,6 +71,10 @@ object SettingsManager {
             _captureSourceFlow.value = value
         }
 
+    var actionBackend: ActionBackend
+        get() = ActionBackend.fromValue(prefs.getString("actionBackend", null))
+        set(value) = prefs.edit().putString("actionBackend", value.value).apply()
+
     /** Full base URL of the hosted gateway, scheme included (e.g. "https://gw.example.com"). */
     var gatewayBaseUrl: String
         get() = prefs.getString("gatewayBaseUrl", null) ?: Secrets.gatewayBaseUrl
@@ -75,6 +91,27 @@ object SettingsManager {
         get() = gatewayBaseUrl.startsWith("http") &&
             gatewayToken.isNotEmpty() &&
             !gatewayToken.startsWith("YOUR_")
+
+    /** Phone-reachable OpenClaw endpoint, normally exposed only on Tailnet. */
+    var openClawBaseUrl: String
+        get() = prefs.getString("openClawBaseUrl", null)
+            ?: prefs.getString("openClawHost", null)?.let { host ->
+                val port = prefs.getInt("openClawPort", 18789)
+                "${host.trimEnd('/')}:$port"
+            }
+            ?: ""
+        set(value) = prefs.edit().putString("openClawBaseUrl", value).apply()
+
+    var openClawGatewayToken: String
+        get() = prefs.getString("openClawGatewayToken", "").orEmpty()
+        set(value) = prefs.edit().putString("openClawGatewayToken", value).apply()
+
+    var openClawAgentId: String
+        get() = prefs.getString("openClawAgentId", "main").orEmpty().ifBlank { "main" }
+        set(value) = prefs.edit().putString("openClawAgentId", value.ifBlank { "main" }).apply()
+
+    val isOpenClawConfigured: Boolean
+        get() = openClawBaseUrl.startsWith("http") && openClawGatewayToken.isNotBlank()
 
     var intelligenceEngine: IntelligenceEngine
         get() = IntelligenceEngine.fromValue(prefs.getString("intelligenceEngine", null))
