@@ -119,6 +119,12 @@ object SettingsManager {
         get() = prefs.getString("openClawGatewayToken", "").orEmpty()
         set(value) = prefs.edit().putString("openClawGatewayToken", value).apply()
 
+    /** Explicit runtime owner. Multi-agent OpenClaw gateways intentionally
+     * reject ambient HTTP requests that do not select an agent. */
+    var openClawAgentId: String
+        get() = prefs.getString("openClawAgentId", "main").orEmpty().ifBlank { "main" }
+        set(value) = prefs.edit().putString("openClawAgentId", value.ifBlank { "main" }).apply()
+
     /** Compatibility properties consumed by the proven direct OpenClaw
      * client from Ryo's beta branch. New settings store one canonical URL. */
     val openClawHost: String

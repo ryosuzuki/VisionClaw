@@ -80,6 +80,7 @@ object GatewayApi {
         val request = Request.Builder()
             .url("${SettingsManager.openClawBaseUrl.trimEnd('/')}/v1/chat/completions")
             .header("Authorization", "Bearer ${SettingsManager.openClawGatewayToken}")
+            .header("x-openclaw-agent-id", SettingsManager.openClawAgentId)
             .header("x-openclaw-message-channel", "glass")
             .get()
             .build()

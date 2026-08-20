@@ -91,6 +91,7 @@ class OpenClawBridge {
                 .url(url)
                 .get()
                 .addHeader("Authorization", "Bearer ${GeminiConfig.openClawGatewayToken}")
+                .addHeader("x-openclaw-agent-id", GeminiConfig.openClawAgentId)
                 .addHeader("x-openclaw-message-channel", "glass")
                 .addHeader("x-openclaw-scopes", "operator.write")
                 .build()
@@ -145,7 +146,7 @@ class OpenClawBridge {
             put("content", normalized)
         })
         val body = JSONObject().apply {
-            put("model", "openclaw")
+            put("model", "openclaw/${GeminiConfig.openClawAgentId}")
             put("messages", messagesArray)
             put("stream", false)
         }
@@ -153,6 +154,7 @@ class OpenClawBridge {
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .addHeader("Authorization", "Bearer ${GeminiConfig.openClawGatewayToken}")
+            .addHeader("x-openclaw-agent-id", GeminiConfig.openClawAgentId)
             .addHeader("Content-Type", "application/json")
             .addHeader("x-openclaw-session-key", sessionKey)
             .addHeader("x-openclaw-message-channel", "glass")
@@ -301,7 +303,7 @@ class OpenClawBridge {
         for (msg in conversationHistory) messagesArray.put(msg)
 
         val body = JSONObject().apply {
-            put("model", "openclaw")
+            put("model", "openclaw/${GeminiConfig.openClawAgentId}")
             put("messages", messagesArray)
             put("stream", false)
         }
@@ -310,6 +312,7 @@ class OpenClawBridge {
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .addHeader("Authorization", "Bearer ${GeminiConfig.openClawGatewayToken}")
+            .addHeader("x-openclaw-agent-id", GeminiConfig.openClawAgentId)
             .addHeader("Content-Type", "application/json")
             .addHeader("x-openclaw-session-key", sessionKey)
             .addHeader("x-openclaw-message-channel", "glass")

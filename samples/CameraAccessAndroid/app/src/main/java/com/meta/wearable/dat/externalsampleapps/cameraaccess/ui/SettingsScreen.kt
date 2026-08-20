@@ -312,6 +312,7 @@ private fun GatewaySettingsScreen(
     var geminiAPIKey by remember { mutableStateOf(SettingsManager.geminiAPIKey) }
     var openClawBaseUrl by remember { mutableStateOf(SettingsManager.openClawBaseUrl) }
     var openClawGatewayToken by remember { mutableStateOf(SettingsManager.openClawGatewayToken) }
+    var openClawAgentId by remember { mutableStateOf(SettingsManager.openClawAgentId) }
     var webrtcSignalingURL by remember { mutableStateOf(SettingsManager.webrtcSignalingURL) }
 
     fun saveAndClose() {
@@ -320,6 +321,7 @@ private fun GatewaySettingsScreen(
         SettingsManager.geminiAPIKey = geminiAPIKey.trim()
         SettingsManager.openClawBaseUrl = openClawBaseUrl.trim()
         SettingsManager.openClawGatewayToken = openClawGatewayToken.trim()
+        SettingsManager.openClawAgentId = openClawAgentId.trim()
         SettingsManager.webrtcSignalingURL = webrtcSignalingURL.trim()
         onBack()
     }
@@ -386,6 +388,12 @@ private fun GatewaySettingsScreen(
                     label = "OpenClaw Gateway Token",
                     placeholder = "Stored only on this device",
                     isSecret = true,
+                )
+                MonoTextField(
+                    value = openClawAgentId,
+                    onValueChange = { openClawAgentId = it },
+                    label = "OpenClaw Agent ID",
+                    placeholder = "main",
                 )
             }
 

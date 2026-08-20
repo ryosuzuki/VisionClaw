@@ -33,6 +33,9 @@ object GeminiConfig {
     val openClawGatewayToken: String
         get() = SettingsManager.openClawGatewayToken
 
+    val openClawAgentId: String
+        get() = SettingsManager.openClawAgentId
+
     fun websocketURL(): String? {
         if (apiKey == "YOUR_GEMINI_API_KEY" || apiKey.isEmpty()) return null
         return "$WEBSOCKET_BASE_URL?key=$apiKey"
