@@ -308,6 +308,7 @@ private fun GatewaySettingsScreen(
     var openClawBaseUrl by remember { mutableStateOf(SettingsManager.openClawBaseUrl) }
     var openClawGatewayToken by remember { mutableStateOf(SettingsManager.openClawGatewayToken) }
     var openClawAgentId by remember { mutableStateOf(SettingsManager.openClawAgentId) }
+    var localLiveKitGatewayUrl by remember { mutableStateOf(SettingsManager.localLiveKitGatewayUrl) }
     var webrtcSignalingURL by remember { mutableStateOf(SettingsManager.webrtcSignalingURL) }
 
     fun saveAndClose() {
@@ -316,6 +317,7 @@ private fun GatewaySettingsScreen(
         SettingsManager.openClawBaseUrl = openClawBaseUrl.trim()
         SettingsManager.openClawGatewayToken = openClawGatewayToken.trim()
         SettingsManager.openClawAgentId = openClawAgentId.trim()
+        SettingsManager.localLiveKitGatewayUrl = localLiveKitGatewayUrl.trim()
         SettingsManager.webrtcSignalingURL = webrtcSignalingURL.trim()
         onBack()
     }
@@ -357,7 +359,14 @@ private fun GatewaySettingsScreen(
             )
 
             SectionHeader("OpenClaw")
-            FooterText("Used only for tool execution. Credentials remain on this device.")
+            FooterText("Self-hosted voice, video, and tools over your tailnet. No Access Code or cloud gateway.")
+            MonoTextField(
+                value = localLiveKitGatewayUrl,
+                onValueChange = { localLiveKitGatewayUrl = it },
+                label = "Local VisionClaw URL",
+                placeholder = "http://100.x.y.z:8788",
+                keyboardType = KeyboardType.Uri,
+            )
             MonoTextField(
                 value = openClawBaseUrl,
                 onValueChange = { openClawBaseUrl = it },

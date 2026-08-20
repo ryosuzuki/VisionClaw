@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -51,6 +52,33 @@ from openclaw_relay import (
 )
 
 logger = logging.getLogger("visionclaw-agent")
+
+
+def _bootstrap_local_self_hosted() -> None:
+    """Use the Mac Studio's existing secure OpenClaw key store in local mode.
+
+    No credential is copied into the repo, launch command, app, or logs. The
+    documented LiveKit development credentials are limited to the tailnet-only
+    server; production/Fly behavior is unchanged.
+    """
+    if os.environ.get("VISIONCLAW_LOCAL_SELF_HOSTED") != "1":
+        return
+    os.environ.setdefault("LIVEKIT_URL", "ws://100.118.73.1:7880")
+    os.environ.setdefault("LIVEKIT_API_KEY", "devkey")
+    os.environ.setdefault("LIVEKIT_API_SECRET", "secret")
+    os.environ.setdefault("GATEWAY_URL", "http://127.0.0.1:8788")
+    os.environ.setdefault("GATEWAY_SERVICE_TOKEN", "local-tailnet-service")
+    if not os.environ.get("GOOGLE_API_KEY"):
+        try:
+            secret_file = Path.home() / ".openclaw" / "secrets.json"
+            value = json.loads(secret_file.read_text()).get("google", "")
+            if isinstance(value, str) and value:
+                os.environ["GOOGLE_API_KEY"] = value
+        except Exception as exc:
+            logger.warning("local Google credential unavailable: %s", type(exc).__name__)
+
+
+_bootstrap_local_self_hosted()
 
 INSTRUCTIONS = """You are VisionClaw, an AI assistant the user talks to while showing you the
 world through their phone camera or smart glasses. Keep responses concise and natural.

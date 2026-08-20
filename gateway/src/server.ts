@@ -105,6 +105,33 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
+// Tailnet-only self-hosted room ticket. This intentionally has no per-person
+// Access Code: the gateway process is bound to the Mac's Tailscale address,
+// and the resulting room contains only the user's Pixel and the local agent.
+// The public deployment never enables this route.
+app.post("/local-livekit-token", async (req, res) => {
+  if (!config.localSelfHosted) {
+    res.status(404).json({ error: { message: "local self-hosting is disabled" } });
+    return;
+  }
+  const { LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET } = process.env;
+  if (!LIVEKIT_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+    res.status(503).json({ error: { message: "local LiveKit is not configured" } });
+    return;
+  }
+  const { AccessToken } = await import("livekit-server-sdk");
+  const { engine } = liveKitSelections(req.body);
+  const identity = `local-pixel-${randomUUID()}`;
+  const room = `vc-local-${Date.now().toString(36)}`;
+  const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+    identity,
+    ttl: "15m",
+    metadata: JSON.stringify({ engine, actionBackend: "openclaw" }),
+  });
+  at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true });
+  res.json({ url: LIVEKIT_URL, room, token: await at.toJwt() });
+});
+
 // The app's delegateTask() posts OpenAI-style chat completions here.
 app.post("/v1/chat/completions", async (req, res) => {
   const userId = userFromRequest(req);
@@ -515,7 +542,7 @@ wss.on("connection", (ws: WebSocket) => {
   });
 });
 
-httpServer.listen(config.port, () => {
-  console.log(`[gateway] listening on :${config.port}`);
+httpServer.listen(config.port, config.host, () => {
+  console.log(`[gateway] listening on ${config.host}:${config.port}`);
   console.log(`[gateway] app settings -> host: http://<this-host>  port: ${config.port}`);
 });

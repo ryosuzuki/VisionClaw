@@ -546,7 +546,8 @@ class LiveKitSessionViewModel(
     }
 
     private suspend fun connectInternal() {
-        if (!SettingsManager.isGatewayConfigured) {
+        val actionBackend = SettingsManager.actionBackend
+        if (actionBackend == ActionBackend.CLOUD && !SettingsManager.isGatewayConfigured) {
             _uiState.update { it.copy(state = SessionState.Failed("Gateway not configured. Check Settings.")) }
             return
         }
@@ -555,7 +556,6 @@ class LiveKitSessionViewModel(
         stopPreview()
         try {
             val engine = SettingsManager.intelligenceEngine
-            val actionBackend = SettingsManager.actionBackend
             if (actionBackend == ActionBackend.OPENCLAW && !SettingsManager.isOpenClawConfigured) {
                 throw IOException("OpenClaw not configured. Check Settings.")
             }
@@ -840,15 +840,22 @@ class LiveKitSessionViewModel(
         engine: IntelligenceEngine,
         actionBackend: ActionBackend,
     ): Ticket = withContext(Dispatchers.IO) {
-        val baseUrl = SettingsManager.gatewayBaseUrl.trimEnd('/')
+        val selfHosted = actionBackend == ActionBackend.OPENCLAW
+        val baseUrl = if (selfHosted) {
+            SettingsManager.localLiveKitGatewayUrl.trimEnd('/')
+        } else {
+            SettingsManager.gatewayBaseUrl.trimEnd('/')
+        }
         val body = JSONObject()
             .put("engine", engine.value)
             .put("actionBackend", actionBackend.value)
             .toString()
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
-            .url("$baseUrl/livekit-token")
-            .header("Authorization", "Bearer ${SettingsManager.gatewayToken}")
+            .url("$baseUrl/${if (selfHosted) "local-livekit-token" else "livekit-token"}")
+            .apply {
+                if (!selfHosted) header("Authorization", "Bearer ${SettingsManager.gatewayToken}")
+            }
             .post(body)
             .build()
         httpClient.newCall(request).execute().use { response ->
