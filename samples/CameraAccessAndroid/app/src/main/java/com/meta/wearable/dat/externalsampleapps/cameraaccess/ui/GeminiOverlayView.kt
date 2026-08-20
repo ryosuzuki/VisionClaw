@@ -85,7 +85,7 @@ fun GeminiStatusBar(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        StatusPill(
+        GeminiStatusPill(
             label = "AI",
             color = when (connectionState) {
                 is GeminiConnectionState.Ready -> Color(0xFF4CAF50)
@@ -97,7 +97,7 @@ fun GeminiStatusBar(
         )
 
         if (openClawState !is OpenClawConnectionState.NotConfigured) {
-            StatusPill(
+            GeminiStatusPill(
                 label = "OpenClaw",
                 color = when (openClawState) {
                     is OpenClawConnectionState.Connected -> Color(0xFF4CAF50)
@@ -111,7 +111,7 @@ fun GeminiStatusBar(
 }
 
 @Composable
-fun StatusPill(
+fun GeminiStatusPill(
     label: String,
     color: Color,
     modifier: Modifier = Modifier,
