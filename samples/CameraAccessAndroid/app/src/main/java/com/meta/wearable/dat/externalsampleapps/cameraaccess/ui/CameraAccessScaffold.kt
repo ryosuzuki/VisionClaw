@@ -52,7 +52,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.livekit.LiveKitSessionViewModel
-import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.ActionBackend
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.CaptureSource
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.SettingsManager
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.wearables.WearablesViewModel
@@ -71,17 +70,13 @@ fun CameraAccessScaffold(
   // Builds ship without a gateway token (it is per-person identity), so an
   // install with none configured sees only the access-code gate. Re-checked
   // when Settings closes because the token can be edited or reset there.
-  var actionBackend by remember { mutableStateOf(SettingsManager.actionBackend) }
   var tokenConfigured by remember { mutableStateOf(SettingsManager.isGatewayConfigured) }
   LaunchedEffect(uiState.isSettingsVisible) {
     if (!uiState.isSettingsVisible) {
-      actionBackend = SettingsManager.actionBackend
       tokenConfigured = SettingsManager.isGatewayConfigured
     }
   }
-  // Sean's access code belongs only to the hosted Cloud path. Direct
-  // Self-hosted mode must remain usable when no hosted identity exists.
-  if (actionBackend == ActionBackend.CLOUD && !tokenConfigured) {
+  if (!tokenConfigured) {
     AccessCodeScreen(onUnlocked = { tokenConfigured = true }, modifier = modifier)
     return
   }
@@ -150,33 +145,17 @@ fun CameraAccessScaffold(
         // Phone mode is the app's front door: no onboarding, no intermediate
         // screen -- the camera preview + call button IS the home screen.
         captureSource == CaptureSource.PHONE ->
-            if (actionBackend == ActionBackend.SELF_HOSTED) {
-              StreamScreen(
-                  wearablesViewModel = viewModel,
-                  isPhoneMode = true,
-                  onOpenSettings = { viewModel.showSettings() },
-              )
-            } else {
-              LiveKitStreamScreen(
-                  onOpenSettings = { viewModel.showSettings() },
-              )
-            }
+            LiveKitStreamScreen(
+                onOpenSettings = { viewModel.showSettings() },
+            )
         // Glasses mode with registered glasses: the SAME call screen, with
         // glasses frames as the video source, is the root -- streaming
         // auto-starts, so there is no start-choice interstitial.
         uiState.isRegistered ->
-            if (actionBackend == ActionBackend.SELF_HOSTED && uiState.isStreaming) {
-              StreamScreen(
-                  wearablesViewModel = viewModel,
-                  isPhoneMode = false,
-                  onOpenSettings = { viewModel.showSettings() },
-              )
-            } else {
-              LiveKitStreamScreen(
-                  onOpenSettings = { viewModel.showSettings() },
-                  glassesIssue = uiState.glassesIssue,
-              )
-            }
+            LiveKitStreamScreen(
+                onOpenSettings = { viewModel.showSettings() },
+                glassesIssue = uiState.glassesIssue,
+            )
         // Unregistered glasses mode: the connect screen.
         else ->
             HomeScreen(

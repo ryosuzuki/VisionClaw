@@ -24,7 +24,6 @@ import com.meta.wearable.dat.externalsampleapps.cameraaccess.livekit.LiveKitSess
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.CaptureSource
-import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.ActionBackend
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.SettingsManager
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.ui.CameraAccessScaffold
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.wearables.WearablesViewModel
@@ -82,7 +81,7 @@ class MainActivity : ComponentActivity() {
       // scaffold triggers the same path when the user switches to glasses.
       if (SettingsManager.captureSource == CaptureSource.GLASSES) {
         viewModel.startMonitoring()
-      } else if (SettingsManager.actionBackend == ActionBackend.CLOUD) {
+      } else {
         // First-ever launch: the phone screen composed before the grant and
         // its auto-start declined; retry now that the permissions exist.
         ViewModelProvider(this)[LiveKitSessionViewModel::class.java].autoStartIfNeeded()

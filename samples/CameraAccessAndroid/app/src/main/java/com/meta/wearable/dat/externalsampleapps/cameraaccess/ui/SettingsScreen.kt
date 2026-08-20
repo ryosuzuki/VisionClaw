@@ -43,12 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.CaptureSource
-import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.ActionBackend
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.GatewayApi
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.GatewayStatus
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.IntelligenceEngine
@@ -66,10 +63,7 @@ fun SettingsScreen(
     when (subScreen) {
         SettingsSubScreen.CONNECTED_APPS -> ConnectedAppsScreen(onBack = { subScreen = null })
         SettingsSubScreen.RECENT_TASKS -> RecentTasksScreen(onBack = { subScreen = null })
-        SettingsSubScreen.GATEWAY -> GatewaySettingsScreen(
-            actionBackend = SettingsManager.actionBackend,
-            onBack = { subScreen = null },
-        )
+        SettingsSubScreen.GATEWAY -> GatewaySettingsScreen(onBack = { subScreen = null })
         null -> SettingsMainScreen(
             onBack = onBack,
             onOpen = { subScreen = it },
@@ -87,14 +81,13 @@ private fun SettingsMainScreen(
 ) {
     val captureSource by SettingsManager.captureSourceFlow.collectAsStateWithLifecycle()
     var intelligenceEngine by remember { mutableStateOf(SettingsManager.intelligenceEngine) }
-    var actionBackend by remember { mutableStateOf(SettingsManager.actionBackend) }
     var showCaptions by remember { mutableStateOf(SettingsManager.showCaptions) }
     var gatewayStatus by remember { mutableStateOf<GatewayStatus>(GatewayStatus.Checking) }
     var showResetDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(actionBackend) {
+    LaunchedEffect(Unit) {
         gatewayStatus = GatewayStatus.Checking
-        gatewayStatus = GatewayApi.checkActionBackendStatus()
+        gatewayStatus = GatewayApi.checkStatus()
     }
 
     BackHandler { onBack() }
@@ -183,29 +176,8 @@ private fun SettingsMainScreen(
                 )
             }
 
-            SectionHeader("Action backend")
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                ActionBackend.entries.forEachIndexed { index, backend ->
-                    SegmentedButton(
-                        selected = backend == actionBackend,
-                        onClick = {
-                            actionBackend = backend
-                            SettingsManager.actionBackend = backend
-                        },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = index,
-                            count = ActionBackend.entries.size,
-                        ),
-                    ) { Text(backend.label) }
-                }
-            }
-            FooterText(
-                if (actionBackend == ActionBackend.SELF_HOSTED) {
-                    "Voice and vision run directly on this device; actions go straight to your private OpenClaw. No VisionClaw Access Code is used."
-                } else {
-                    "Actions run in VisionClaw Cloud."
-                },
-            )
+            // Gateway status + navigation rows
+            SectionHeader("Gateway")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -214,15 +186,13 @@ private fun SettingsMainScreen(
                 Text("Status", style = MaterialTheme.typography.bodyLarge)
                 GatewayStatusLabel(status = gatewayStatus)
             }
-            if (actionBackend == ActionBackend.CLOUD) {
-                NavigationRow("Connected Apps") { onOpen(SettingsSubScreen.CONNECTED_APPS) }
-                NavigationRow("Recent Tasks") { onOpen(SettingsSubScreen.RECENT_TASKS) }
-            }
+            NavigationRow("Connected Apps") { onOpen(SettingsSubScreen.CONNECTED_APPS) }
+            NavigationRow("Recent Tasks") { onOpen(SettingsSubScreen.RECENT_TASKS) }
             // The URL ships with a working default and the token is captured
             // on first launch, so most people never need to see them;
             // surfacing them as primary fields made a configured setup look
             // like one awaiting setup.
-            NavigationRow("Backend settings") { onOpen(SettingsSubScreen.GATEWAY) }
+            NavigationRow("Gateway settings") { onOpen(SettingsSubScreen.GATEWAY) }
 
             // Reset
             TextButton(onClick = { showResetDialog = true }) {
@@ -242,7 +212,6 @@ private fun SettingsMainScreen(
                 TextButton(onClick = {
                     SettingsManager.resetAll()
                     intelligenceEngine = SettingsManager.intelligenceEngine
-                    actionBackend = SettingsManager.actionBackend
                     showCaptions = SettingsManager.showCaptions
                     showResetDialog = false
                 }) {
@@ -303,25 +272,16 @@ private fun NavigationRow(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GatewaySettingsScreen(
-    actionBackend: ActionBackend,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var gatewayBaseUrl by remember { mutableStateOf(SettingsManager.gatewayBaseUrl) }
     var gatewayToken by remember { mutableStateOf(SettingsManager.gatewayToken) }
-    var geminiAPIKey by remember { mutableStateOf(SettingsManager.geminiAPIKey) }
-    var openClawBaseUrl by remember { mutableStateOf(SettingsManager.openClawBaseUrl) }
-    var openClawGatewayToken by remember { mutableStateOf(SettingsManager.openClawGatewayToken) }
-    var openClawAgentId by remember { mutableStateOf(SettingsManager.openClawAgentId) }
     var webrtcSignalingURL by remember { mutableStateOf(SettingsManager.webrtcSignalingURL) }
 
     fun saveAndClose() {
         SettingsManager.gatewayBaseUrl = gatewayBaseUrl.trim()
         SettingsManager.gatewayToken = gatewayToken.trim()
-        SettingsManager.geminiAPIKey = geminiAPIKey.trim()
-        SettingsManager.openClawBaseUrl = openClawBaseUrl.trim()
-        SettingsManager.openClawGatewayToken = openClawGatewayToken.trim()
-        SettingsManager.openClawAgentId = openClawAgentId.trim()
         SettingsManager.webrtcSignalingURL = webrtcSignalingURL.trim()
         onBack()
     }
@@ -330,7 +290,7 @@ private fun GatewaySettingsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Backend settings") },
+            title = { Text("Gateway settings") },
             navigationIcon = {
                 IconButton(onClick = { saveAndClose() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -346,56 +306,20 @@ private fun GatewaySettingsScreen(
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (actionBackend == ActionBackend.CLOUD) {
-                SectionHeader("VisionClaw Cloud")
-                FooterText("Sean's hosted LiveKit voice/video service. The access code is used only in Cloud mode.")
-                MonoTextField(
-                    value = gatewayBaseUrl,
-                    onValueChange = { gatewayBaseUrl = it },
-                    label = "Gateway URL",
-                    placeholder = "https://gateway.example.com",
-                    keyboardType = KeyboardType.Uri,
-                )
-                MonoTextField(
-                    value = gatewayToken,
-                    onValueChange = { gatewayToken = it },
-                    label = "Access Token",
-                    placeholder = "Your gateway access token",
-                    isSecret = true,
-                )
-            } else {
-                SectionHeader("Direct Gemini Live")
-                FooterText("Runs realtime voice and vision directly on this device. No VisionClaw Access Code is used.")
-                MonoTextField(
-                    value = geminiAPIKey,
-                    onValueChange = { geminiAPIKey = it },
-                    label = "Gemini API Key",
-                    placeholder = "Stored only on this device",
-                    isSecret = true,
-                )
-
-                SectionHeader("Self-hosted OpenClaw")
-                MonoTextField(
-                    value = openClawBaseUrl,
-                    onValueChange = { openClawBaseUrl = it },
-                    label = "OpenClaw URL",
-                    placeholder = "http://100.x.y.z:18789",
-                    keyboardType = KeyboardType.Uri,
-                )
-                MonoTextField(
-                    value = openClawGatewayToken,
-                    onValueChange = { openClawGatewayToken = it },
-                    label = "OpenClaw Gateway Token",
-                    placeholder = "Stored only on this device",
-                    isSecret = true,
-                )
-                MonoTextField(
-                    value = openClawAgentId,
-                    onValueChange = { openClawAgentId = it },
-                    label = "OpenClaw Agent ID",
-                    placeholder = "main",
-                )
-            }
+            SectionHeader("Gateway")
+            MonoTextField(
+                value = gatewayBaseUrl,
+                onValueChange = { gatewayBaseUrl = it },
+                label = "Gateway URL",
+                placeholder = "https://gateway.example.com",
+                keyboardType = KeyboardType.Uri,
+            )
+            MonoTextField(
+                value = gatewayToken,
+                onValueChange = { gatewayToken = it },
+                label = "Access Token",
+                placeholder = "Your gateway access token",
+            )
 
             // Glasses live POV streaming; unrelated to the gateway but equally
             // rarely touched.
@@ -438,7 +362,6 @@ private fun MonoTextField(
     label: String,
     placeholder: String,
     keyboardType: KeyboardType = KeyboardType.Text,
-    isSecret: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
@@ -449,6 +372,5 @@ private fun MonoTextField(
         textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
     )
 }
