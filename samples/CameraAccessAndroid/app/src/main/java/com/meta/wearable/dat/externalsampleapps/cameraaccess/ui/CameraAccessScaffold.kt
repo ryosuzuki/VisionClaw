@@ -76,7 +76,10 @@ fun CameraAccessScaffold(
       tokenConfigured = SettingsManager.isGatewayConfigured
     }
   }
-  if (!tokenConfigured) {
+  val selfHostedReady = SettingsManager.actionBackend ==
+      com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.ActionBackend.OPENCLAW &&
+      SettingsManager.isSelfHostedConfigured
+  if (!tokenConfigured && !selfHostedReady) {
     AccessCodeScreen(onUnlocked = { tokenConfigured = true }, modifier = modifier)
     return
   }

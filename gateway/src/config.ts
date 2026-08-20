@@ -1,7 +1,16 @@
 import "dotenv/config";
 
+const localSelfHosted = process.env.VISIONCLAW_LOCAL_SELF_HOSTED === "1";
+if (localSelfHosted) {
+  process.env.LIVEKIT_URL ||= "ws://100.118.73.1:7880";
+  process.env.LIVEKIT_API_KEY ||= "devkey";
+  process.env.LIVEKIT_API_SECRET ||= "secret";
+}
+
 export interface GatewayConfig {
   port: number;
+  host: string;
+  localSelfHosted: boolean;
   storePath: string;
   /** token -> userId. Parsed from GATEWAY_TOKENS="tokenA:alice,tokenB:bob". */
   tokens: Map<string, string>;
@@ -38,6 +47,8 @@ function parseTokens(raw: string | undefined): Map<string, string> {
 
 export const config: GatewayConfig = {
   port: Number(process.env.PORT ?? 8788),
+  host: process.env.HOST ?? "127.0.0.1",
+  localSelfHosted,
   storePath: process.env.STORE_PATH ?? "./data/gateway-store.json",
   tokens: parseTokens(process.env.GATEWAY_TOKENS),
   // Sonnet with no reasoning effort: the voice loop's tasks are mostly tool
@@ -50,7 +61,8 @@ export const config: GatewayConfig = {
       : (process.env.AGENT_EFFORT as Exclude<GatewayConfig["agentEffort"], null>),
   quickAnswerTimeoutMs: Number(process.env.QUICK_ANSWER_TIMEOUT_MS ?? 30_000),
   spawnMode: process.env.SPAWN_MODE !== "false",
-  serviceToken: process.env.GATEWAY_SERVICE_TOKEN || undefined,
+  serviceToken:
+    process.env.GATEWAY_SERVICE_TOKEN || (localSelfHosted ? "local-tailnet-service" : undefined),
 };
 
 if (config.tokens.size === 0) {

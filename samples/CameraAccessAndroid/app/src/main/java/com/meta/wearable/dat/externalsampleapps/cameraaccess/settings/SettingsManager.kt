@@ -53,6 +53,7 @@ enum class CaptureSource(val value: String, val label: String) {
 object SettingsManager {
     private const val PREFS_NAME = "visionclaw_settings"
     private const val DEFAULT_SIGNALING_URL = "wss://YOUR_SIGNALING_SERVER"
+    private const val DEFAULT_LOCAL_LIVEKIT_GATEWAY = "http://100.118.73.1:8788"
 
     private lateinit var prefs: SharedPreferences
 
@@ -112,6 +113,15 @@ object SettingsManager {
 
     val isOpenClawConfigured: Boolean
         get() = openClawBaseUrl.startsWith("http") && openClawGatewayToken.isNotBlank()
+
+    /** Tailnet-only ticket service hosted beside OpenClaw on the Mac Studio. */
+    var localLiveKitGatewayUrl: String
+        get() = prefs.getString("localLiveKitGatewayUrl", DEFAULT_LOCAL_LIVEKIT_GATEWAY)
+            .orEmpty().ifBlank { DEFAULT_LOCAL_LIVEKIT_GATEWAY }
+        set(value) = prefs.edit().putString("localLiveKitGatewayUrl", value).apply()
+
+    val isSelfHostedConfigured: Boolean
+        get() = isOpenClawConfigured && localLiveKitGatewayUrl.startsWith("http")
 
     var intelligenceEngine: IntelligenceEngine
         get() = IntelligenceEngine.fromValue(prefs.getString("intelligenceEngine", null))
