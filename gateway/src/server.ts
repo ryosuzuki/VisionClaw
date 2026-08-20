@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import express from "express";
+import { liveKitSelections } from "./livekit.js";
 import { WebSocketServer, type WebSocket } from "ws";
 import { config } from "./config.js";
 import { initStore, saveStore, userResources } from "./store.js";
@@ -283,13 +284,13 @@ app.post("/livekit-token", async (req, res) => {
   // setup and greeting time.
   void ensureUser(userId).catch((err) => console.warn(`[provision] pre-warm failed for ${userId}:`, err));
   const { AccessToken } = await import("livekit-server-sdk");
-  // The engine choice (gemini | openai) rides as participant metadata; the
-  // worker reads it when the user joins and picks the realtime model.
-  const engine = req.body?.engine === "openai" ? "openai" : "gemini";
+  // Realtime engine and action backend ride as signed metadata. Private
+  // OpenClaw URL/credentials remain on the Android device.
+  const { engine, actionBackend } = liveKitSelections(req.body);
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: userId,
     ttl: "15m",
-    metadata: JSON.stringify({ engine }),
+    metadata: JSON.stringify({ engine, actionBackend }),
   });
   // One room per call, not per user: agent dispatch fires on room creation,
   // so a redial into a still-draining room from the previous call would get

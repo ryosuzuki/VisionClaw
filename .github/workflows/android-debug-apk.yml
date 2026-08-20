@@ -1,0 +1,36 @@
+name: Android debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/sean-current-openclaw
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: samples/CameraAccessAndroid
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Create non-secret build defaults
+        run: cp app/src/main/java/com/meta/wearable/dat/externalsampleapps/cameraaccess/Secrets.kt.example app/src/main/java/com/meta/wearable/dat/externalsampleapps/cameraaccess/Secrets.kt
+      - name: Unit tests and debug APK
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./gradlew -Dorg.gradle.java.home="$JAVA_HOME" testDebugUnitTest assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v5
+        with:
+          name: visionclaw-sean-current-openclaw-debug
+          path: samples/CameraAccessAndroid/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

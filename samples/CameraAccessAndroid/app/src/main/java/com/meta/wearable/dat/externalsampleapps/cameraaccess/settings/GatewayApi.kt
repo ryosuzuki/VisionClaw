@@ -69,6 +69,35 @@ object GatewayApi {
         }
     }
 
+    /** Read-only reachability check for the selected action backend. A GET to
+     * the OpenClaw completion endpoint may return 405; that still proves the
+     * private endpoint and credential were accepted without starting a task. */
+    suspend fun checkActionBackendStatus(): GatewayStatus = withContext(Dispatchers.IO) {
+        if (SettingsManager.actionBackend == ActionBackend.CLOUD) {
+            return@withContext checkStatus()
+        }
+        if (!SettingsManager.isOpenClawConfigured) return@withContext GatewayStatus.NotConfigured
+        val agentId = SettingsManager.openClawAgentId
+        val request = Request.Builder()
+            .url("${SettingsManager.openClawBaseUrl.trimEnd('/')}/v1/chat/completions")
+            .header("Authorization", "Bearer ${SettingsManager.openClawGatewayToken}")
+            .header("x-openclaw-agent-id", agentId)
+            .header("x-openclaw-message-channel", "glass")
+            .get()
+            .build()
+        try {
+            client.newCall(request).execute().use { response ->
+                when (response.code) {
+                    401, 403 -> GatewayStatus.Unauthorized
+                    in 200..499 -> GatewayStatus.Ready
+                    else -> GatewayStatus.Unreachable("Server error ${response.code}")
+                }
+            }
+        } catch (_: IOException) {
+            GatewayStatus.Unreachable("Unreachable")
+        }
+    }
+
     suspend fun fetchApps(): Result<List<ConnectableApp>> = withContext(Dispatchers.IO) {
         if (!SettingsManager.isGatewayConfigured) {
             return@withContext Result.failure(IOException("Gateway not configured"))
