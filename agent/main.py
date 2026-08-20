@@ -66,7 +66,7 @@ def _bootstrap_local_self_hosted() -> None:
     os.environ.setdefault("LIVEKIT_URL", "ws://100.118.73.1:7880")
     os.environ.setdefault("LIVEKIT_API_KEY", "devkey")
     os.environ.setdefault("LIVEKIT_API_SECRET", "secret")
-    os.environ.setdefault("GATEWAY_URL", "http://100.118.73.1:8788")
+    os.environ.setdefault("GATEWAY_URL", "http://127.0.0.1:8788")
     os.environ.setdefault("GATEWAY_SERVICE_TOKEN", "local-tailnet-service")
     if not os.environ.get("GOOGLE_API_KEY"):
         try:
@@ -886,16 +886,6 @@ async def entrypoint(ctx: JobContext):
             interrupted=bool(getattr(item, "interrupted", False)),
         )
 
-    if os.environ.get("VISIONCLAW_LOCAL_SMOKE") == "1" and action_backend == "openclaw":
-        smoke = await phone_openclaw_execute(
-            userdata,
-            "Reply with exactly VISIONCLAW_SELF_HOSTED_LIVEKIT_OK",
-            None,
-        )
-        if "VISIONCLAW_SELF_HOSTED_LIVEKIT_OK" not in smoke:
-            raise RuntimeError("local OpenClaw smoke response did not match")
-        logger.info("VISIONCLAW_SELF_HOSTED_LIVEKIT_OK")
-
     await session.start(
         agent=Agent(
             instructions=INSTRUCTIONS,
@@ -907,7 +897,6 @@ async def entrypoint(ctx: JobContext):
         # asked what it sees.
         room_input_options=RoomInputOptions(video_enabled=True),
     )
-
 
     # Results that finished after a previous call ended are waiting at the
     # gateway; deliver them up front so a hangup never discards an answer.
